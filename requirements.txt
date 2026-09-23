@@ -1,0 +1,6 @@
+# Dependencias diretas; versoes do ambiente usado no projeto.
+# Ollama e o modelo sao instalados separadamente.
+fastapi==0.141.1
+uvicorn==0.53.0
+pydantic==2.13.5
+httpx==0.28.1

@@ -1,0 +1,152 @@
+{
+  "info": {
+    "name": "A3 Test - API de Incidentes",
+    "description": "Health, extracao e dois cenarios manuais de erro. Execute separadamente: o teste 503 exige encerrar o Ollama mantendo a API ativa.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:8000",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health - API disponivel",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{base_url}}/health"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"API saudavel\", function () { pm.expect(pm.response.json().status).to.equal(\"ok\"); });"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "Incidente - extrair dados com LLM",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/incidentes",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"texto\": \"Ontem \u00e0s 14h, no escrit\u00f3rio de S\u00e3o Paulo, houve uma falha no  servidor principal que afetou o sistema de faturamento por 2  horas.   \"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Teste com Ollama ativo. Pode substituir o texto por outros relatos: as verificacoes conferem status, campos e tipos, sem exigir uma data especifica."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Retorna os quatro campos obrigatorios\", function () { const resposta = pm.response.json(); pm.expect(resposta).to.have.all.keys(\"data_ocorrencia\", \"local\", \"tipo_incidente\", \"impacto\"); });",
+              "pm.test(\"Campos possuem texto ou null\", function () { const resposta = pm.response.json(); [\"data_ocorrencia\", \"local\", \"tipo_incidente\", \"impacto\"].forEach(function (campo) { pm.expect(resposta[campo] === null || typeof resposta[campo] === \"string\").to.equal(true); }); });"
+            ]
+          }
+        }
+      ],
+      "response": []
+    },
+    {
+      "name": "Erros - executar manualmente",
+      "description": "Execute individualmente. Entrada invalida: API ativa. Ollama desligado: encerre somente o Ollama, mantenha a API ativa e depois reinicie o Ollama. Nao execute toda a collection esperando sucesso com um unico estado do servico.",
+      "item": [
+        {
+          "name": "Entrada invalida - apenas espacos",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/incidentes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"texto\": \"   \"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Mantenha a API ativa. O corpo com apenas espacos deve ser rejeitado antes de chamar o modelo."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status HTTP 422\", function () { pm.response.to.have.status(422); });",
+                  "pm.test(\"Mensagem de erro esperada\", function () { pm.expect(pm.response.json().detail).to.equal(\"O texto do incidente n\\u00e3o pode conter apenas espa\\u00e7os.\"); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        },
+        {
+          "name": "Ollama desligado - falha de comunicacao",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/incidentes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"texto\": \"Ontem \u00e0s 14h, no escrit\u00f3rio de S\u00e3o Paulo, houve uma falha no  servidor principal que afetou o sistema de faturamento por 2  horas.   \"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Encerre o servico Ollama e mantenha o Uvicorn ativo. Execute esta requisicao e depois inicie o Ollama novamente. Fechar apenas a conversa com o modelo nao encerra o servico."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status HTTP 503\", function () { pm.response.to.have.status(503); });",
+                  "pm.test(\"Mensagem de erro esperada\", function () { pm.expect(pm.response.json().detail).to.equal(\"N\\u00e3o foi poss\\u00edvel comunicar com o Ollama. Verifique se ele est\\u00e1 em execu\\u00e7\\u00e3o.\"); });"
+                ]
+              }
+            }
+          ],
+          "response": []
+        }
+      ]
+    }
+  ]
+}
